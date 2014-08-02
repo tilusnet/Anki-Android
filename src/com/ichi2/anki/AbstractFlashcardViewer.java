@@ -33,6 +33,7 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.media.AudioManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -61,8 +62,8 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.WindowManager;
-import android.view.inputmethod.InputMethodManager;
 import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
 import android.webkit.JsResult;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
@@ -72,13 +73,12 @@ import android.widget.Chronometer;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
-import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
-
 import com.ichi2.anim.ActivityTransitionAnimation;
 import com.ichi2.anim.ViewAnimation;
+import com.ichi2.anki.exception.APIVersionException;
 import com.ichi2.anki.receiver.SdCardReceiver;
 import com.ichi2.anki.reviewer.ReviewerExtRegistry;
 import com.ichi2.async.DeckTask;
@@ -107,9 +107,12 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -383,6 +386,11 @@ public abstract class AbstractFlashcardViewer extends NavigationDrawerActivity {
         @Override
         public void run() {
             Log.i(AnkiDroidApp.TAG, "onEmulatedLongClick");
+            // Show hint about lookup function if dictionary available and Webview version supports text selection
+            if (!mDisableClipboard && Lookup.isAvailable() && AnkiDroidApp.SDK_VERSION >= 11) {
+                String lookupHint = getResources().getString(R.string.lookup_hint);
+                Themes.showThemedToast(AbstractFlashcardViewer.this, lookupHint, false);
+            }
             Vibrator vibratorManager = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
             vibratorManager.vibrate(50);
             longClickHandler.postDelayed(startLongClickAction, 300);
@@ -867,18 +875,40 @@ public abstract class AbstractFlashcardViewer extends NavigationDrawerActivity {
         return m.replaceFirst(sb.toString());
     }
 
+    /**
+       Return the correct answer to use for {{type::cloze::NN}} fields.
+
+       @param txt The field text with the clozes
+       @param idx The index of the cloze to use
+       @return A string with a comma-separeted list of unique cloze strings with the corret index.
+    */
 
     private String contentForCloze(String txt, int idx) {
         Pattern re = Pattern.compile("\\{\\{c" + idx + "::(.+?)\\}\\}");
         Matcher m = re.matcher(txt);
-        if (!m.find()) {
-            return null;
-        }
-        String result = m.group(1);
+        Set<String> matches = new LinkedHashSet<String>();
+        // LinkedHashSet: make entries appear only once, like Anki desktop (see also issue #2208), and keep the order
+        // they appear in.
+        String groupOne = new String();
+        int colonColonIndex = -1;
         while (m.find()) {
-            result += ", " + m.group(1);
+            groupOne = m.group(1);
+            colonColonIndex = groupOne.indexOf("::");
+            if (colonColonIndex > -1) {
+                // Cut out the hint.
+                groupOne = groupOne.substring(0, colonColonIndex);
+            }
+            matches.add(groupOne);
         }
-        return result;
+        // Now do what the pythonic ", ".join(matches) does in a tricky way
+        String prefix = "";
+        StringBuilder resultBuilder = new StringBuilder();
+        for (String match : matches) {
+            resultBuilder.append(prefix);
+            resultBuilder.append(match);
+            prefix = ", ";
+        }
+        return resultBuilder.toString();
     }
 
     private Handler mTimerHandler = new Handler();
@@ -939,7 +969,7 @@ public abstract class AbstractFlashcardViewer extends NavigationDrawerActivity {
     protected void initActivity(Collection col) {
         mSched = col.getSched();
         mCollectionFilename = col.getPath();
-        mBaseUrl = Utils.getBaseUrl(col.getMedia().getDir());
+        mBaseUrl = Utils.getBaseUrl(col.getMedia().dir());
 
         restorePreferences();
 
@@ -1712,8 +1742,7 @@ public abstract class AbstractFlashcardViewer extends NavigationDrawerActivity {
             AnkiDroidApp.getCompat().setScrollbarFadingEnabled(webView, false);
         }
         Log.i(AnkiDroidApp.TAG,
-                "Focusable = " + webView.isFocusable() + ", Focusable in touch mode = "
-                        + webView.isFocusableInTouchMode());
+                "Focusable = " + webView.isFocusable() + ", Focusable in touch mode = " + webView.isFocusableInTouchMode());
 
         // Filter any links using the custom "playsound" protocol defined in Sound.java.
         // We play sounds through these links when a user taps the sound icon.
@@ -1728,7 +1757,20 @@ public abstract class AbstractFlashcardViewer extends NavigationDrawerActivity {
                     sHandler.sendMessage(msg);
                     return true;
                 }
-                return false;
+                try {
+                    new URL(url);  // dummy variable to check if the string looks like an url
+                } catch (MalformedURLException mue) {
+                    // Ignore malformed urls by handling them and then doing nothing.
+                    return true;
+                }
+                if (url.startsWith("file"))
+                {
+                    return false;  // Let the webview load files, i.e. local images.
+                }
+                Log.d(AnkiDroidApp.TAG, "Opening external link \"" + url + "\" with an Intent");
+                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                startActivity(intent);
+                return true;
             }
         });
 
@@ -1897,6 +1939,7 @@ public abstract class AbstractFlashcardViewer extends NavigationDrawerActivity {
         mPrefHideDueCount = preferences.getBoolean("hideDueCount", false);
         mPrefWhiteboard = preferences.getBoolean("whiteboard", false);
         mPrefWriteAnswers = !preferences.getBoolean("writeAnswersDisable", false);
+        mDisableClipboard = preferences.getString("dictionary","0").equals("0");
         mLongClickWorkaround = preferences.getBoolean("textSelectionLongclickWorkaround", false);
         // mDeckFilename = preferences.getString("deckFilename", "");
         mNightMode = preferences.getBoolean("invertedColors", false);
@@ -1986,8 +2029,7 @@ public abstract class AbstractFlashcardViewer extends NavigationDrawerActivity {
                 try {
                     mSetTextIsSelectable = TextView.class.getMethod("setTextIsSelectable", boolean.class);
                 } catch (Throwable e) {
-                    Log.i(AnkiDroidApp.TAG,
-                            "mSetTextIsSelectable could not be found due to a too low Android version (< 3.0)");
+                    Log.i(AnkiDroidApp.TAG, "mSetTextIsSelectable could not be found due to a too low Android version (< 3.0)");
                     mSetTextIsSelectable = null;
                 }
                 if (mSetTextIsSelectable != null) {
@@ -2210,7 +2252,11 @@ public abstract class AbstractFlashcardViewer extends NavigationDrawerActivity {
         answerText = matcher.replaceAll("\n");
         matcher = Sound.sSoundPattern.matcher(answerText);
         answerText = matcher.replaceAll("");
-        return AnkiDroidApp.getCompat().nfcNormalized(answerText);
+        try {
+            return AnkiDroidApp.getCompat().nfcNormalized(answerText);
+        } catch (APIVersionException e) {
+            return answerText;
+        }
     }
 
     /**
@@ -2223,7 +2269,11 @@ public abstract class AbstractFlashcardViewer extends NavigationDrawerActivity {
         if (answer == null || answer.equals("")) {
             return "";
         }
-        return AnkiDroidApp.getCompat().nfcNormalized(answer.trim());
+        try {
+            return AnkiDroidApp.getCompat().nfcNormalized(answer.trim());
+        } catch (APIVersionException e) {
+            return answer.trim();
+        }
     }
 
 
