@@ -25,7 +25,9 @@
     <string name="multimedia_editor_languages_mandarin">Mandarin</string>
     <string name="multimedia_editor_languages_portuguese">Portuguese</string>
     <string name="multimedia_editor_languages_english">English</string>
-
+    <string name="multimedia_editor_languages_british_english">English (British)</string>
+    <string name="multimedia_editor_languages_american_english">English (American)</string>
+    
     <!-- Main editor popup menu items -->
     <string name="multimedia_editor_popup_image">Add image</string>
     <string name="multimedia_editor_popup_audio">Record audio</string>

@@ -17,7 +17,7 @@
  * this program.  If not, see <http://www.gnu.org/licenses/>.                           *
  ****************************************************************************************/
 
-package com.ichi2.anki.multimediacard.activity;
+package com.ichi2.anki.multimediacard.beolingus;
 
 import android.app.Activity;
 import android.app.ProgressDialog;
@@ -36,7 +36,6 @@ import android.widget.Spinner;
 import android.widget.Toast;
 
 import com.ichi2.anki.R;
-import com.ichi2.anki.multimediacard.beolingus.parsing.BeolingusParser;
 import com.ichi2.anki.multimediacard.language.LanguageListerBeolingus;
 import com.ichi2.anki.runtimetools.TaskOperations;
 import com.ichi2.anki.web.HttpFetcher;

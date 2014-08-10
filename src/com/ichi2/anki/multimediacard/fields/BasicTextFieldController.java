@@ -35,10 +35,10 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.ichi2.anki.R;
-import com.ichi2.anki.multimediacard.activity.LoadPronounciationActivity;
 import com.ichi2.anki.multimediacard.activity.PickStringDialogFragment;
 import com.ichi2.anki.multimediacard.activity.SearchImageActivity;
 import com.ichi2.anki.multimediacard.activity.TranslationActivity;
+import com.ichi2.anki.multimediacard.beolingus.LoadPronounciationActivity;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -175,6 +175,7 @@ public class BasicTextFieldController extends FieldControllerBase implements IFi
 
 
     // Here is all the functionality to provide translations
+    // TODO Make this structure abstract
     private void createTranslateButton(LinearLayout layoutTool, LayoutParams ps) {
         Button btnTranslate = new Button(mActivity);
         btnTranslate.setText(gtxt(R.string.multimedia_editor_text_field_editing_translate));

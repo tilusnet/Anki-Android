@@ -22,3 +22,6 @@ out/
 
 # Temporary file by update-localizations.py
 ankidroid.zip
+
+# thq
+res/values/81-thqcreds.xml

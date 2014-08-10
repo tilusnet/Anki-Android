@@ -273,7 +273,7 @@
             android:label="@string/title_activity_translation" >
         </activity>
         <activity
-            android:name="com.ichi2.anki.multimediacard.activity.LoadPronounciationActivity"
+            android:name="com.ichi2.anki.multimediacard.beolingus.LoadPronounciationActivity"
             android:configChanges="keyboardHidden|orientation|locale|screenSize"
             android:label="@string/title_activity_load_pronounciation" >
         </activity>
